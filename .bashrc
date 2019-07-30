@@ -74,6 +74,34 @@ function get_branch(){
     kill -INT $$;
 }
 
+integrationBranch() {
+  integrationBranch=$1
+  baseBranch=$2
+  mergeBranch=$3
+  if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
+    echo "Some parameters missing"
+    echo "Usage: integrationBranch integration-branch base-branch merge-branch"
+  else
+    gc master
+    gb -D "$integrationBranch"
+    gc "$baseBranch"
+    git pull
+    git checkout -b "$integrationBranch"
+    git merge "$mergeBranch" --no-edit
+    git push --set-upstream origin "$integrationBranch" -f
+    gc "$mergeBranch"
+  fi
+}
+
+gitlog() {
+  count=5
+  if (( $# == 1 ))
+  then
+    count=$1
+  fi
+  git log --oneline -$count
+}
+
 delete_password() {
   security delete-generic-password -s company -a $USER
 }
@@ -131,7 +159,7 @@ checkport() {
 }
 
 # Kill process on port
-function killport() {
+killport() {
     lsof -n -i4TCP:$1 | grep LISTEN | awk '{ print $2 }' | xargs kill
 }
 
