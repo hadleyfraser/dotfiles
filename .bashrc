@@ -3,12 +3,17 @@ function gc() {
     # if there is no parameter then return
     if (( $# != 1 ))
     then
-        echo "Ticket number or develop|master required required as first parameter."
+        echo "Ticket number or main/production is required required as first parameter."
         echo "Usage: gc xxx"
         return
     fi
 
-    if [[ $1 =~ ^(develop|master)$ ]]
+    if ([[ $1 == "prod" ]]) 
+    then 
+        set -- "production"
+    fi
+
+    if [[ $1 =~ ^(main|master|production)$ ]]
     then
         branch=$1;
     else
@@ -16,7 +21,6 @@ function gc() {
     fi
 
     git checkout $branch;
-    git pull;
 }
 
 # Merges the passed feature branch ticket number into the current branch
@@ -62,7 +66,7 @@ function get_branch(){
     for branch in ${branches[@]}
     do
         # if we have found the branch check it out and exit the function
-        if [[ $branch = $1 || $branch =~ ^((PBS|SAT)-)?$1.*$ ]]
+        if [[ $branch = $1 || $branch =~ ^(([a-zA-Z]{3})-)?$1.*$ ]]
         then
             branch=$branch;
             return
@@ -103,21 +107,25 @@ gitlog() {
 }
 
 delete_password() {
-  security delete-generic-password -s company -a $USER
+  security delete-generic-password -s origin -a $ORIGIN_USER
 }
 
 set_password() {
-  security add-generic-password -s company -a $USER -w
+  security add-generic-password -s origin -a $ORIGIN_USER -w
 }
 
 get_password() {
-  echo $(security find-generic-password -s company -a $USER -w)
+  echo $(security find-generic-password -s origin -a $ORIGIN_USER -w)
+}
+
+check_login() {
+  echo "buttonClicked=4&network_name=Guest+Network&username=$ORIGIN_USER&password=$(urlencode $(get_password))"
 }
 
 cisco_login() {
   echo "Logging in..."
 
-  RESULT=$(curl -s --max-time 2 'http://1.1.1.1/login.html' -H 'Content-Type: application/x-www-form-urlencoded' --data "username=$USER&password=$(urlencode $(get_password))")
+  RESULT=$(curl -s --max-time 2 'http://1.1.1.1/login.html' -H 'Content-Type: application/x-www-form-urlencoded' --data "buttonClicked=4&network_name=Guest+Network&username=$ORIGIN_USER&password=$(urlencode $(get_password))")
 
   if [[ $RESULT = *"Login Successful"* ]]; then
     echo "Login Successful!"
@@ -153,6 +161,14 @@ urlencode() {
     LC_COLLATE=$old_lc_collate
 }
 
+listRemoteMerged() {
+  git branch -r --merged | grep -v master | sed 's/origin\//:/'
+}
+
+deleteRemoteMerged() {
+  listRemoteMerged | xargs -n 1 git push origin
+  git remote prune origin
+}
 
 checkport() {
   lsof -nP -i4TCP:$1 | grep LISTEN
@@ -161,6 +177,31 @@ checkport() {
 # Kill process on port
 killport() {
     lsof -n -i4TCP:$1 | grep LISTEN | awk '{ print $2 }' | xargs kill
+}
+
+# destroy all dockers
+dockerreset() {
+   docker rm -f $(docker ps -a -q)
+   docker rmi -f $(docker images -a -q)
+   docker volume rm $(docker volume ls -q)
+   docker network rm $(docker network ls -q)
+}
+
+e2e() {
+  make run/local environment=$1 proxy=true
+}
+
+perf() {
+  make run environment=$1 proxy=true
+}
+
+getbpid() {
+  bash "${HOME}/getbpid.sh" $1 $2
+}
+
+proxy() {
+  proxyname="proxy$1"
+  echo "${!proxyname}"
 }
 
 export NVM_DIR="$HOME/.nvm"
